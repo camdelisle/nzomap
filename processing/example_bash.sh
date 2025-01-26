@@ -63,5 +63,7 @@ source venv/bin/activate || { echo "Failed to activate virtual environment"; exi
 # Install Python dependencies
 pip install -r requirements.txt || { echo "Failed to install Python dependencies"; exit 1; }
 
+chmod +x processing_flow_v2.py || { echo "Failed to set executable permissions for processing_flow_v2.py"; exit 1; }
+
 # Run the Python script
 python processing_flow_v2.py || { echo "Failed to run the Python script"; exit 1; }
