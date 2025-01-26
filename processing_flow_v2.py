@@ -336,8 +336,9 @@ if __name__ == "__main__":
                     ymin = int(returned_json['ymin'])
                     chunks.append({"chunk_id": area_uuid, "xmin": xmin, "ymin": ymin, "file_list": file_list})
             
-            asyncio.run(main(chunks))
-            recommence = False
+            if len(folders) > 0:
+                asyncio.run(main(chunks))
+                recommence = False
 
         r = requests.get('https://fcghgojd5l.execute-api.us-east-2.amazonaws.com/dev/new_area')
         if r.status_code == 200:
@@ -357,4 +358,3 @@ if __name__ == "__main__":
         chunk_2 = {"chunk_id": area_uuid, "xmin": xmin, "ymin": ymin, "file_list": file_list}
 
         asyncio.run(main([chunk_1, chunk_2]))
-        break
