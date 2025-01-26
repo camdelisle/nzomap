@@ -13,6 +13,17 @@ s3 = boto3.client('s3',
                   endpoint_url='https://opentopography.s3.sdsc.edu',
                   config=Config(signature_version='unsigned'))
 
+# client S3 2 - nzomap
+# we will have full S3 access via IAM role when the script is run using EC2
+s3_nz = boto3.client('s3')
+
+if os.name == 'nt':
+    pullauta = 'pullauta.exe'
+    lastile = 'lastile64.exe'
+else:
+    pullauta = 'pullauta'
+    lastile = 'lastile64'
+
 
 # Create a directory if it doesn't exist
 def ensure_dir(directory):
@@ -177,7 +188,7 @@ def create_osm_txt_file(main_dir):
 
 ### WIP ###
 # Function to upload files
-async def upload_files(output_folder,chunk_id, valid_area):
+async def upload_files(output_folder,chunk_id,xmin,ymin):
     # identify valid files
     # valid files look like tile_1640000_5381800.laz_depr.png
     # there are also invalid files like tile_1640000_5381800.laz.png
@@ -191,8 +202,12 @@ async def upload_files(output_folder,chunk_id, valid_area):
             file_name = os.path.basename(file)
             x = file_name.split('_')[1]
             y = file_name.split('_')[2]
+            if x >= xmin and x < xmin + 5000 and y >= ymin and y < ymin + 5000:
+                # we need to convert the x,y of each tile into the correct format for the S3 bucket
+                x_fix = x / 200
+                y_fix = y / 200
+                tasks.append(loop.run_in_executor(executor, s3_nz.upload_file, file, 'nzomap', f'tiles/15/{x_fix}/{y_fix}.png'))
 
-            tasks.append(loop.run_in_executor(executor, s3.upload_file, file, 'pc-bulk'))
         await asyncio.gather(*tasks)
 
     print(f"Uploaded chunk {chunk_id}")
@@ -204,7 +219,7 @@ async def upload_files(output_folder,chunk_id, valid_area):
 
 # Function to run lastile command
 async def run_lastile(process_dir):
-    cmd = f"lastile {os.path.join(process_dir,'downloaded_files','*.laz')} -o {os.path.join(process_dir,'tiles')}"
+    cmd = f"lastile64 -i {os.path.join(process_dir,'downloaded_files','*.laz')} -tile_size 200 -odir {os.path.join(process_dir,'tiles')} -o tile.laz"
     process = await asyncio.create_subprocess_shell(cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
     stdout, stderr = await process.communicate()
     if process.returncode == 0:
@@ -225,7 +240,7 @@ async def run_pullauta(process_dir):
 
 # Main function to orchestrate the workflow
 async def main():
-    await start_executors(2)
+    await start_executors(2,4)
 
 # v2
 
@@ -236,26 +251,49 @@ async def download_files_v2(file_list,process_dir):
         tasks2 = []
         for file_path in file_list.split(','):
             local_path = os.path.join(process_dir,'downloaded_files', os.path.basename(file_path))
-            tasks2.append(loop2.run_in_executor(executor2, s3.download_file, bucket_name, file_path, local_path))
+            tasks2.append(loop2.run_in_executor(executor2, s3.download_file, 'pc-bulk', file_path, local_path))
         await asyncio.gather(*tasks2)
 
     print(f"Downloaded chunk")
 
 
 
-async def process_chunk_v2(process_dir,file_list,area_uuid):
-    download_dir = os.path.join(process_dir,'download')
-    processing_dir = os.path.join(process_dir,'processing')
+async def process_chunk_v2(cwd,cores):
+    r = requests.get('https://fcghgojd5l.execute-api.us-east-2.amazonaws.com/dev/new_area')
+    if r.status_code == 200:
+        returned_json = json.loads(r.json()['body'])
+        area_uuid = returned_json['uuid']
+        file_list = returned_json['files']
+        xmin = int(returned_json['xmin'])
+        ymin = int(returned_json['ymin'])
+    else:
+        print('Failed to get new area')
+        return False
+                
+    local_chunk_dir = os.path.join(cwd, f'chunk_{area_uuid}')
+    ensure_dir(local_chunk_dir)
+    ensure_dir(os.path.join(local_chunk_dir,'downloaded_files'))
+    ensure_dir(os.path.join(local_chunk_dir,'tiles'))
+    ensure_dir(os.path.join(local_chunk_dir,'output'))
+
+    shutil.copyfile(os.path.join(cwd,pullauta), os.path.join(local_chunk_dir,pullauta))
+
+    create_pullauta_file(cores,local_chunk_dir)
+    create_osm_txt_file(local_chunk_dir)
+
+    download_dir = os.path.join(cwd,'download')
+    processing_dir = os.path.join(cwd,'processing')
     while os.path.exists(download_dir):
-        asyncio.sleep(15)
+        print('Waiting for download capacity..')
+        await asyncio.sleep(15)
 
     # create download directory
     os.makedirs(download_dir)
-    await download_files_v2(file_list,process_dir)
+    await download_files_v2(file_list,local_chunk_dir)
 
     # await release of processing capacity next
     while os.path.exists(processing_dir):
-        asyncio.sleep(15)
+        await asyncio.sleep(15)
     
     # claim processing capacity
     os.makedirs(processing_dir)
@@ -263,52 +301,36 @@ async def process_chunk_v2(process_dir,file_list,area_uuid):
     os.rmdir(download_dir)
 
     # run lastile and then pullauta
-    await run_lastile(process_dir)
-    await run_pullauta(process_dir)
+    await run_lastile(local_chunk_dir)
+    await run_pullauta(local_chunk_dir)
 
     # release process capacity now we only need to upload
     os.rmdir(processing_dir)
 
     # upload files
-    await upload_output(process_dir,area_uuid)
+    await upload_files(local_chunk_dir,area_uuid,xmin,ymin)
 
     # cleanup
-    shutil.rmtree(process_dir)  # Clean up the processing directory
+    shutil.rmtree(local_chunk_dir)  # Clean up the processing directory
+
+    return True
 
 
 # Function to split processing into 2 executors, to make sure that we don't wait for 1 batch to finish before downloading the next
 async def start_executors(workers,cores):
-    with ThreadPoolExecutor(max_workers=workers) as executor:
-        loop = asyncio.get_event_loop()
-        tasks = []
-        i = 0
-        while True:
-            r = requests.get('https://fcghgojd5l.execute-api.us-east-2.amazonaws.com/dev/new_area')
-            if r.status_code == 200:
-                returned_json = json.loads(r.json()['body'])
-                area_uuid = returned_json['uuid']
-                file_list = returned_json['files']
-            else:
-                print('Failed to get new area')
+    cwd = os.getcwd()
+    while True:
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            loop = asyncio.get_event_loop()
+            tasks = []
+            for i in range(workers):
+                await asyncio.sleep(i*2)
+                tasks.append(loop.run_in_executor(executor, process_chunk_v2,cwd,cores))
+        
+            output = await asyncio.gather(*tasks)
+            if not all(output):
+                print(f"Failed to process all chunks")
                 break
-            i = i + 1
-            if i > 20:
-                i = 5
 
-            local_chunk_dir = os.path.join(local_base_dir, f'chunk_{area_uuid}')
-            ensure_dir(local_chunk_dir)
-            ensure_dir(os.path.join(local_chunk_dir,'downloaded_files'))
-            ensure_dir(os.path.join(local_chunk_dir,'tiles'))
-            ensure_dir(os.path.join(local_chunk_dir,'output'))
 
-            shutil.copyfile(os.path.join(local_base_dir,'pullauta'), os.path.join(local_chunk_dir,'pullauta'))
-
-            create_pullauta_file(cores,local_chunk_dir)
-            create_osm_txt_file(local_chunk_dir)
-
-            asyncio.sleep(i*2) # wait to prevent clashes
-            tasks.append(loop.run_in_executor(executor, process_chunk_v2,local_chunk_dir,file_list,area_uuid))
-        await asyncio.gather(*tasks)
-
-    print(f"Completed all chunks")
-    return True
+asyncio.run(main())

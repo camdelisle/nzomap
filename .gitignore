@@ -171,4 +171,23 @@ cython_debug/
 .pypirc
 
 # Custom folders
-/processing/tiles
+/processing/tiles_play
+lastile64.exe 
+osm.txt 
+*.pgw
+*.png
+pullauta.exe
+osm.zip
+pullauta.ini
+*.bin 
+plan.txt
+/temp
+/temp1
+/temp2
+/temp3
+/temp4
+*.dbf
+*.prj
+*.shp
+*.shx
+launch.json
