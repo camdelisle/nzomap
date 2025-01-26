@@ -358,8 +358,3 @@ if __name__ == "__main__":
 
         asyncio.run(main([chunk_1, chunk_2]))
         break
-
-
-# asyncio.run(upload_files('C:/Users/camer/nzomap_code/nzomap/process/9b0c1a61-3b7d-462d-b8dd-8526cf618a0c/output', '9b0c1a61-3b7d-462d-b8dd-8526cf618a0c', 1860000, 5770000))
-
-#asyncio.run(run_pullauta(os.getcwd()))
