@@ -307,33 +307,23 @@ async def main(chunks):
     download_semaphore = asyncio.Semaphore(1)  # Only one download at a time
     pullauta_semaphore = asyncio.Semaphore(1)  # Only one pullauta execution at a time
 
-    tasks = [process_chunk(chunk,download_semaphore,pullauta_semaphore) for chunk in chunks]
+    tasks = [process_chunk(chunk['chunk_id'],chunk['xmin'],chunk['ymin'],chunk['file_list'],download_semaphore,pullauta_semaphore) for chunk in chunks]
     await asyncio.gather(*tasks)
 
 if __name__ == "__main__":
     async def process_all_chunks():
-        if os.path.exists("process") and len(os.listdir("process")) > 0:
-            folders = os.listdir("process")
-            chunks = []
-            for folder in folders:
-                if os.path.isdir(folder):
-                    area_uuid = os.path.basename(folder)
-                    payload = {"uuid": area_uuid}
-                    r = requests.get(
-                        "https://fcghgojd5l.execute-api.us-east-2.amazonaws.com/dev/check_area",
-                        json=payload,
-                    )
-                    returned_json = json.loads(r.json()["body"])
-                    file_list = returned_json["files"]
-                    xmin = int(returned_json["xmin"])
-                    ymin = int(returned_json["ymin"])
-                    chunks.append(
-                         {"chunk_id": area_uuid, "xmin": xmin, "ymin": ymin, "file_list": file_list}
-                    )
+        if os.path.exists("process"):
+            shutil.rmtree("process")
 
-            await main(chunks)
+        r = requests.get("https://fcghgojd5l.execute-api.us-east-2.amazonaws.com/dev/new_area")
+        if r.status_code == 200:
+            returned_json = json.loads(r.json()["body"])
+            area_uuid = returned_json["uuid"]
+            file_list = returned_json["files"]
+            xmin = int(returned_json["xmin"])
+            ymin = int(returned_json["ymin"])
+            chunk_1 = {"chunk_id": area_uuid, "xmin": xmin, "ymin": ymin, "file_list": file_list}
 
-        else:
             r = requests.get("https://fcghgojd5l.execute-api.us-east-2.amazonaws.com/dev/new_area")
             if r.status_code == 200:
                 returned_json = json.loads(r.json()["body"])
@@ -341,21 +331,15 @@ if __name__ == "__main__":
                 file_list = returned_json["files"]
                 xmin = int(returned_json["xmin"])
                 ymin = int(returned_json["ymin"])
-                chunk_1 = {"chunk_id": area_uuid, "xmin": xmin, "ymin": ymin, "file_list": file_list}
-
-                r = requests.get("https://fcghgojd5l.execute-api.us-east-2.amazonaws.com/dev/new_area")
-                if r.status_code == 200:
-                    returned_json = json.loads(r.json()["body"])
-                    area_uuid = returned_json["uuid"]
-                    file_list = returned_json["files"]
-                    xmin = int(returned_json["xmin"])
-                    ymin = int(returned_json["ymin"])
-                    chunk_2 = {"chunk_id": area_uuid, "xmin": xmin, "ymin": ymin, "file_list": file_list}
+                chunk_2 = {"chunk_id": area_uuid, "xmin": xmin, "ymin": ymin, "file_list": file_list}
 
                 await main([chunk_1, chunk_2])
             
             else:
-                raise Exception("No new areas available")
+                await main([chunk_1])
+            
+        else:
+            raise Exception("No new areas available")
 
     # Create the loop once
     while True:
