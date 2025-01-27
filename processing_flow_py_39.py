@@ -23,10 +23,6 @@ else:
 
 cores = 4  # Number of cores to use for processing
 
-# Semaphore instances to control concurrency
-download_semaphore = asyncio.Semaphore(1)  # Only one download at a time
-pullauta_semaphore = asyncio.Semaphore(1)  # Only one pullauta execution at a time
-
 # Utility Functions
 
 def ensure_dir(directory):
@@ -244,7 +240,7 @@ def create_osm_txt_file():
     write_file( "osm.txt", content)
 
 
-async def process_chunk(chunk_id, xmin, ymin, file_list):
+async def process_chunk(chunk_id, xmin, ymin, file_list, download_semaphore, pullauta_semaphore):
     """Processes a chunk of data."""
     process_dir = os.path.join("process", str(chunk_id))
 
@@ -307,39 +303,37 @@ async def process_chunk(chunk_id, xmin, ymin, file_list):
 async def main(chunks):
     """Main function to process all chunks."""
 
-    tasks = [process_chunk(**chunk) for chunk in chunks]
+    # Semaphore instances to control concurrency
+    download_semaphore = asyncio.Semaphore(1)  # Only one download at a time
+    pullauta_semaphore = asyncio.Semaphore(1)  # Only one pullauta execution at a time
+
+    tasks = [process_chunk(chunk,download_semaphore,pullauta_semaphore) for chunk in chunks]
     await asyncio.gather(*tasks)
 
 if __name__ == "__main__":
     async def process_all_chunks():
-        recommence = False
-        if os.path.exists("process"):
-            recommence = True
+        if os.path.exists("process") and len(os.listdir("process")) > 0:
+            folders = os.listdir("process")
+            chunks = []
+            for folder in folders:
+                if os.path.isdir(folder):
+                    area_uuid = os.path.basename(folder)
+                    payload = {"uuid": area_uuid}
+                    r = requests.get(
+                        "https://fcghgojd5l.execute-api.us-east-2.amazonaws.com/dev/check_area",
+                        json=payload,
+                    )
+                    returned_json = json.loads(r.json()["body"])
+                    file_list = returned_json["files"]
+                    xmin = int(returned_json["xmin"])
+                    ymin = int(returned_json["ymin"])
+                    chunks.append(
+                         {"chunk_id": area_uuid, "xmin": xmin, "ymin": ymin, "file_list": file_list}
+                    )
 
-        while True:
-            if recommence:
-                folders = os.listdir("process")
-                chunks = []
-                for folder in folders:
-                    if os.path.isdir(folder):
-                        area_uuid = os.path.basename(folder)
-                        payload = {"uuid": area_uuid}
-                        r = requests.get(
-                            "https://fcghgojd5l.execute-api.us-east-2.amazonaws.com/dev/check_area",
-                            json=payload,
-                        )
-                        returned_json = json.loads(r.json()["body"])
-                        file_list = returned_json["files"]
-                        xmin = int(returned_json["xmin"])
-                        ymin = int(returned_json["ymin"])
-                        chunks.append(
-                            {"chunk_id": area_uuid, "xmin": xmin, "ymin": ymin, "file_list": file_list}
-                        )
+            await main(chunks)
 
-                if len(folders) > 0:
-                    await main(chunks)
-                    recommence = False
-
+        else:
             r = requests.get("https://fcghgojd5l.execute-api.us-east-2.amazonaws.com/dev/new_area")
             if r.status_code == 200:
                 returned_json = json.loads(r.json()["body"])
@@ -359,8 +353,12 @@ if __name__ == "__main__":
                     chunk_2 = {"chunk_id": area_uuid, "xmin": xmin, "ymin": ymin, "file_list": file_list}
 
                 await main([chunk_1, chunk_2])
+            
+            else:
+                raise Exception("No new areas available")
 
     # Create the loop once
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    loop.run_until_complete(process_all_chunks())
+    while True:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(process_all_chunks())
