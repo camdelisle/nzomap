@@ -44,14 +44,18 @@ KARTTAPULLAUTIN_FILE="karttapullautin-x86_64-linux.tar.gz"
 download_with_retries "$LASTOOLS_URL" "$LASTOOLS_FILE" || exit 1
 download_with_retries "$KARTTAPULLAUTIN_URL" "$KARTTAPULLAUTIN_FILE" || exit 1
 
+# we need to ensure that the lastools is unzipped into a different directory as the main folder is called bin
+mkdir /home/ubuntu/las_tools || { echo "Failed to create directory"; exit 1; }
+mkdir /home/ubuntu/kp || { echo "Failed to create directory"; exit 1; }
+
 # Extract binaries
-tar -xvf "$LASTOOLS_FILE" || { echo "Failed to extract $LASTOOLS_FILE"; exit 1; }
-tar -xvf "$KARTTAPULLAUTIN_FILE" || { echo "Failed to extract $KARTTAPULLAUTIN_FILE"; exit 1; }
+tar -xvf "$LASTOOLS_FILE" -C /home/ubuntu/las_tools  || { echo "Failed to extract $LASTOOLS_FILE"; exit 1; }
+tar -xvf "$KARTTAPULLAUTIN_FILE" -C /home/ubuntu/kp || { echo "Failed to extract $KARTTAPULLAUTIN_FILE"; exit 1; }
 
 # Set permissions and move binaries
-chmod +x bin/lastile64 || { echo "Failed to set executable permissions for lastile"; exit 1; }
-chmod +x pullauta || { echo "Failed to set executable permissions for pullauta"; exit 1; }
-sudo mv bin/lastile64 pullauta /home/ubuntu/nzomap_processing || { echo "Failed to move binaries"; exit 1; }
+chmod +x /home/ubuntu/las_tools/bin/lastile64 || { echo "Failed to set executable permissions for lastile"; exit 1; }
+chmod +x /home/ubuntu/kp/pullauta || { echo "Failed to set executable permissions for pullauta"; exit 1; }
+sudo mv /home/ubuntu/las_tools/bin/lastile64 /home/ubuntu/kp/pullauta /home/ubuntu/nzomap_processing || { echo "Failed to move binaries"; exit 1; }
 
 # Navigate to the project directory
 cd /home/ubuntu/nzomap_processing || { echo "Failed to change directory"; exit 1; }
