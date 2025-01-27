@@ -74,8 +74,6 @@ async def run_command(command, cwd):
         cwd=cwd,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
-        env=os.environ,
-        executable='/bin/bash'  # Explicitly use /bin/bash instead of /bin/sh
     )
     stdout, stderr = await process.communicate()
     if process.returncode == 0:
