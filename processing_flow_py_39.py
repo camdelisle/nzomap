@@ -18,8 +18,8 @@ if os.name == 'nt':
     pullauta = 'pullauta'
     lastile = 'lastile64'
 else:
-    pullauta = 'pullauta'
-    lastile = 'lastile64'
+    pullauta = './pullauta'
+    lastile = './lastile64'
 
 cores = 4  # Number of cores to use for processing
 
