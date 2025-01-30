@@ -320,7 +320,18 @@ async def process_chunk(download_semaphore, pullauta_semaphore,i):
         create_osm_txt_file()
 
         await run_lastile(process_dir,cwd)
+        
+        try:
+            shutil.rmtree(os.path.join(process_dir, "downloaded_files"))
+        except:
+            pass
+
         await run_pullauta(cwd)
+
+        try:
+            shutil.rmtree(os.path.join(process_dir, "tiles"))
+        except:
+            pass
 
     # Upload results to S3
     output_folder = os.path.join(process_dir, "output")
@@ -341,13 +352,13 @@ async def main():
     download_semaphore = asyncio.Semaphore(1)  # Only one download at a time
     pullauta_semaphore = asyncio.Semaphore(1)  # Only one pullauta execution at a time
     while True:
-        if len(tasks) < 3:  # Limit concurrency
+        if len(tasks) < 2:  # Limit concurrency
             task = asyncio.create_task(process_chunk(download_semaphore, pullauta_semaphore, len(tasks)))
             tasks.add(task)
             
             task.add_done_callback(lambda t: tasks.remove(t))  # Remove completed task
         
-        await asyncio.sleep(1)  # Prevent CPU overuse
+        await asyncio.sleep(10)  # Prevent CPU overuse
 
 
 if __name__ == "__main__":
