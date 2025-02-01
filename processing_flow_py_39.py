@@ -262,7 +262,7 @@ def create_osm_txt_file():
     write_file( "osm.txt", content)
 
 
-async def process_chunk(chunk_id, xmin, ymin, file_list, download_semaphore, pullauta_semaphore):
+async def process_chunk(chunk_id, xmin, ymin, file_list,overwrite, download_semaphore, pullauta_semaphore):
     """Processes a chunk of data."""
     process_dir = os.path.join("process", str(chunk_id))
 
@@ -316,8 +316,9 @@ async def process_chunk(chunk_id, xmin, ymin, file_list, download_semaphore, pul
 
         await run_lastile(process_dir,cwd)
 
-        # download any preexisting tiles, so we don't reprocess them
-        await download_tiles(os.path.join(process_dir, "output"), xmin, ymin)
+        # download any preexisting tiles, so we don't reprocess them - only when not overwriting
+        if not overwrite:
+            await download_tiles(os.path.join(process_dir, "output"), xmin, ymin)
 
         # run pullauta until all files are processed, or 20 retries
         for i in range(20):
@@ -344,7 +345,7 @@ async def main(chunks):
     download_semaphore = asyncio.Semaphore(1)  # Only one download at a time
     pullauta_semaphore = asyncio.Semaphore(1)  # Only one pullauta execution at a time
 
-    tasks = [process_chunk(chunk['chunk_id'],chunk['xmin'],chunk['ymin'],chunk['file_list'],download_semaphore,pullauta_semaphore) for chunk in chunks]
+    tasks = [process_chunk(chunk['chunk_id'],chunk['xmin'],chunk['ymin'],chunk['file_list'],chunk['overwrite'],download_semaphore,pullauta_semaphore) for chunk in chunks]
     await asyncio.gather(*tasks)
 
 if __name__ == "__main__":
@@ -359,7 +360,8 @@ if __name__ == "__main__":
             file_list = returned_json["files"]
             xmin = int(returned_json["xmin"])
             ymin = int(returned_json["ymin"])
-            chunk_1 = {"chunk_id": area_uuid, "xmin": xmin, "ymin": ymin, "file_list": file_list}
+            overwrite = returned_json['overwrite']
+            chunk_1 = {"chunk_id": area_uuid, "xmin": xmin, "ymin": ymin, "file_list": file_list, 'overwrite': overwrite}
 
             r = requests.get("https://fcghgojd5l.execute-api.us-east-2.amazonaws.com/dev/new_area")
             if r.status_code == 200:
@@ -368,7 +370,8 @@ if __name__ == "__main__":
                 file_list = returned_json["files"]
                 xmin = int(returned_json["xmin"])
                 ymin = int(returned_json["ymin"])
-                chunk_2 = {"chunk_id": area_uuid, "xmin": xmin, "ymin": ymin, "file_list": file_list}
+                overwrite = returned_json['overwrite']
+                chunk_2 = {"chunk_id": area_uuid, "xmin": xmin, "ymin": ymin, "file_list": file_list, 'overwrite': overwrite}
 
                 await main([chunk_1, chunk_2])
             
