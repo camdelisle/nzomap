@@ -293,7 +293,14 @@ async def process_chunk(chunk_id, xmin, ymin, file_list, download_semaphore, pul
         create_osm_txt_file()
 
         await run_lastile(process_dir,cwd)
-        await run_pullauta(cwd)
+        # run pullauta until all files are processed, or 20 retries
+        for i in range(20):
+            print(f"Running pullauta for chunk {chunk_id} - attempt {i+1}")
+            await run_pullauta(cwd)
+            output_pngs = [f for f in os.listdir(os.path.join(process_dir, "output")) if f.endswith('.laz_depr.png')]
+            input_tiles = [f for f in os.listdir(os.path.join(process_dir, "tiles")) if f.endswith('.laz')]
+            if len(output_pngs) == len(input_tiles):
+                break
 
     # Upload results to S3
     output_folder = os.path.join(process_dir, "output")
