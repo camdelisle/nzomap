@@ -324,7 +324,7 @@ async def process_chunk(chunk_id, xmin, ymin, file_list,overwrite, download_sema
         for i in range(20):
             print(f"Running pullauta for chunk {chunk_id} - attempt {i+1}")
             await run_pullauta(cwd)
-            output_pngs = [f for f in os.listdir(os.path.join(process_dir, "output")) if f.endswith('.laz_depr.png')]
+            output_pngs = [f for f in os.listdir(os.path.join(process_dir, "output")) if f.endswith('.laz.png')]
             input_tiles = [f for f in os.listdir(os.path.join(process_dir, "tiles")) if f.endswith('.laz')]
             if len(output_pngs) == len(input_tiles):
                 break
