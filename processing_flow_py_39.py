@@ -66,7 +66,7 @@ async def download_tiles(output_folder, xmin, ymin):
         location = f'tiles/15/{coords[0]}/{coords[1]}.png'
         x = coords[0] * 200
         y = 6553600 - (coords[1] * 200)
-        downloaded_filename = f'tile_{x}_{y}.laz_depr.png'
+        downloaded_filename = f'tile_{x}_{y}.laz.png'
         try:
             await asyncio.to_thread(
                 s3_nz.download_file, 'nzomap', location, os.path.join(output_folder, downloaded_filename)
