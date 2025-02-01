@@ -56,6 +56,28 @@ async def upload_files(output_folder, chunk_id, xmin, ymin):
     print(f"Uploaded chunk {chunk_id}")
     return chunk_id
 
+# this function downloads any existing tiles in the area, so we ignore them when processing
+async def download_tiles(output_folder, xmin, ymin):
+    xmint = xmin // 200
+    ymint = (6553600 - ymin) // 200
+    files_coords = [(x, y) for x in range(xmint, xmint+25) for y in range(ymint, ymint+25)]
+
+    async def download(coords):
+        location = f'tiles/15/{coords[0]}/{coords[1]}.png'
+        x = coords[0] * 200
+        y = 6553600 - (coords[1] * 200)
+        downloaded_filename = f'tile_{x}_{y}.laz_depr.png'
+        try:
+            await asyncio.to_thread(
+                s3_nz.download_file, 'nzomap', location, os.path.join(output_folder, downloaded_filename)
+            )
+        except Exception as e:
+            print(f"Failed to download {location}: {e}")
+
+    tasks = [download(coords) for coords in files_coords]
+    await asyncio.gather(*tasks)
+
+
 # Function to Run External Commands
 async def run_command(command, cwd):
     """Runs an external command asynchronously."""
@@ -293,6 +315,10 @@ async def process_chunk(chunk_id, xmin, ymin, file_list, download_semaphore, pul
         create_osm_txt_file()
 
         await run_lastile(process_dir,cwd)
+
+        # download any preexisting tiles, so we don't reprocess them
+        await download_tiles(os.path.join(process_dir, "output"), xmin, ymin)
+
         # run pullauta until all files are processed, or 20 retries
         for i in range(20):
             print(f"Running pullauta for chunk {chunk_id} - attempt {i+1}")
