@@ -54,8 +54,18 @@ async def upload_files(output_folder, chunk_id, xmin, ymin):
     tasks = [upload(os.path.join(output_folder, file)) for file in files]
     await asyncio.gather(*tasks)
 
-    payload = {'uuid': chunk_id}
-    requests.post('https://fcghgojd5l.execute-api.us-east-2.amazonaws.com/dev/release_area', json=payload)
+    
+    if SPECIFIED_AREA is not None:
+        payload = {
+            'uuid': chunk_id,
+            'area_name': SPECIFIED_AREA
+        }
+        requests.post('https://fcghgojd5l.execute-api.us-east-2.amazonaws.com/dev/release_area_v2', json=payload)
+    
+    else:
+        payload = {'uuid': chunk_id}
+        requests.post('https://fcghgojd5l.execute-api.us-east-2.amazonaws.com/dev/release_area', json=payload)
+
     print(f"Uploaded chunk {chunk_id}")
     return chunk_id
 
