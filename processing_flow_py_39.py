@@ -1,11 +1,14 @@
 import asyncio
 import os
-from concurrent.futures import ThreadPoolExecutor
 import boto3
-from botocore.config import Config
 import shutil
 import requests
 import json
+
+
+# if you want to specify a specific area for download, use this field or otherwise leave as None
+# example: 'NZ20_Hawkes'
+SPECIFIED_AREA = None
 
 # S3 client configurations
 s3_nz = boto3.client('s3')  # S3 client with full access
@@ -353,7 +356,18 @@ if __name__ == "__main__":
         if os.path.exists("process"):
             shutil.rmtree("process")
 
-        r = requests.get("https://fcghgojd5l.execute-api.us-east-2.amazonaws.com/dev/new_area")
+        
+        if SPECIFIED_AREA is not None:
+            payload = {
+                "area_name": SPECIFIED_AREA
+            }
+            # eg "area_name": "NZ20_Hawkes"
+
+            r = requests.post("https://fcghgojd5l.execute-api.us-east-2.amazonaws.com/dev/new_area_specific",json=payload)
+
+        else:
+            r = requests.get("https://fcghgojd5l.execute-api.us-east-2.amazonaws.com/dev/new_area")
+
         if r.status_code == 200:
             returned_json = json.loads(r.json()["body"])
             area_uuid = returned_json["uuid"]
@@ -363,9 +377,19 @@ if __name__ == "__main__":
             overwrite = returned_json['overwrite']
             chunk_1 = {"chunk_id": area_uuid, "xmin": xmin, "ymin": ymin, "file_list": file_list, 'overwrite': overwrite}
 
-            r = requests.get("https://fcghgojd5l.execute-api.us-east-2.amazonaws.com/dev/new_area")
-            if r.status_code == 200:
-                returned_json = json.loads(r.json()["body"])
+            if SPECIFIED_AREA is not None:
+                payload = {
+                    "area_name": SPECIFIED_AREA
+                }
+                # eg "area_name": "NZ20_Hawkes"
+
+                r2 = requests.post("https://fcghgojd5l.execute-api.us-east-2.amazonaws.com/dev/new_area_specific",json=payload)
+
+            else:
+                r2 = requests.get("https://fcghgojd5l.execute-api.us-east-2.amazonaws.com/dev/new_area")
+
+            if r2.status_code == 200:
+                returned_json = json.loads(r2.json()["body"])
                 area_uuid = returned_json["uuid"]
                 file_list = returned_json["files"]
                 xmin = int(returned_json["xmin"])
