@@ -10,9 +10,13 @@ Setting up S3 access:
 2. Download and install aws cli
 3. Run 'aws configure' command in a terminal
 4. Use credentials as follows:
+
 AWS Access Key ID [None]: {as provided}
+
 AWS Secret Access Key [None]: {as provided}
+
 Default region name [None]: us-east-2
+
 Default output format [None]: json
 
 
