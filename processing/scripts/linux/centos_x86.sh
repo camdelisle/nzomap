@@ -29,7 +29,7 @@ download_with_retries() {
 }
 
 # Update and install essential packages
-sudo yum update -y && sudo yum install -y python3.9 git unzip tar
+sudo yum update -y && sudo yum install -y python3.9 git unzip tar curl
 
 # Clone the Python script repository
 git clone https://github.com/camdelisle/nzomap.git /home/ubuntu/nzomap_processing || { echo "Failed to clone repository"; exit 1; }
