@@ -94,7 +94,8 @@ async def download_tiles(output_folder, xmin, ymin):
                 s3_nz.download_file, 'nzomap', location, os.path.join(output_folder, downloaded_filename)
             )
         except Exception as e:
-            print(f"Failed to download {location}: {e}")
+            #print(f"Failed to download {location}: {e}")
+            pass
 
     tasks = [download(coords) for coords in files_coords]
     await asyncio.gather(*tasks)
