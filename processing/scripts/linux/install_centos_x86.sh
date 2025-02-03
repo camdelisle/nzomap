@@ -29,7 +29,14 @@ download_with_retries() {
 }
 
 # Update and install essential packages
-sudo yum update -y && sudo yum install -y python3.9 git unzip tar curl
+sudo yum update -y && sudo yum install -y python3.9 git unzip tar curl awscli
+
+if ! aws sts get-caller-identity &>/dev/null; then
+  echo "AWS credentials are invalid or expired. Please reconfigure."
+  aws configure
+else
+  echo "AWS credentials are valid."
+fi
 
 # Clone the Python script repository
 git clone https://github.com/camdelisle/nzomap.git /home/ubuntu/nzomap_processing || { echo "Failed to clone repository"; exit 1; }
