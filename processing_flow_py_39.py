@@ -6,9 +6,19 @@ import requests
 import json
 
 
+################ SET PARAMS #################
+
 # if you want to specify a specific area for download, use this field or otherwise leave as None
 # example: 'NZ20_Hawkes'
 SPECIFIED_AREA = None
+
+# set the number of threads you wish to use here (VCPU or (cores x2)-2 )
+SET_THREADS = 4
+
+#############################################
+
+
+
 
 # S3 client configurations
 s3_nz = boto3.client('s3')  # S3 client with full access
@@ -24,7 +34,6 @@ else:
     pullauta = './pullauta'
     lastile = './lastile64'
 
-cores = 4  # Number of cores to use for processing
 
 # Utility Functions
 
@@ -173,7 +182,7 @@ def create_pullauta_file(cores, main_dir):
         "waterclass=9",
         "detectbuildings=0",
         "batch=1",
-        f"processes={cores}",
+        f"processes={SET_THREADS}",
         "batchoutfolder="+os.path.join(main_dir, 'output').replace("\\", "/"),
         "lazfolder="+os.path.join(main_dir, 'tiles').replace("\\", "/"),
         "vectorconf=osm.txt",
@@ -324,7 +333,7 @@ async def process_chunk(chunk_id, xmin, ymin, file_list,overwrite, download_sema
         except:
             pass
 
-        create_pullauta_file(cores, process_dir)
+        create_pullauta_file(SET_THREADS, process_dir)
         create_osm_txt_file()
 
         await run_lastile(process_dir,cwd)
