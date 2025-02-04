@@ -36,7 +36,7 @@ def write_file(file_path, content_lines):
 
 
 
-async def upload_files(output_folder, chunk_id, xmin, ymin):
+async def upload_files(output_folder, chunk_id, xmin, ymin, area_name):
     files = [f for f in os.listdir(output_folder) if f.endswith('.laz_depr.png')]
 
     async def upload(file):
@@ -50,8 +50,17 @@ async def upload_files(output_folder, chunk_id, xmin, ymin):
     tasks = [upload(os.path.join(output_folder, file)) for file in files]
     await asyncio.gather(*tasks)
 
-    payload = {'uuid': chunk_id}
-    requests.post('https://fcghgojd5l.execute-api.us-east-2.amazonaws.com/dev/release_area', json=payload)
+    if not area_name == 'LEGACY':
+        payload = {
+            'uuid': chunk_id,
+            'area_name': area_name
+        }
+        requests.post('https://fcghgojd5l.execute-api.us-east-2.amazonaws.com/dev/release_area_v2', json=payload)
+    
+    else:
+        payload = {'uuid': chunk_id}
+        requests.post('https://fcghgojd5l.execute-api.us-east-2.amazonaws.com/dev/release_area', json=payload)
+
     print(f"Uploaded chunk {chunk_id}")
     return chunk_id
 
@@ -258,13 +267,35 @@ async def download_files_concurrently(s3_client, files, download_dir):
         ]
         await asyncio.gather(*tasks)
 
+# this function downloads any existing tiles in the area, so we ignore them when processing
+async def download_tiles(output_folder, xmin, ymin):
+    xmint = xmin // 200
+    ymint = (6553600 - ymin) // 200
+    files_coords = [(x, y) for x in range(xmint, xmint+25) for y in range(ymint, ymint+25)]
+
+    async def download(coords):
+        location = f'tiles/15/{coords[0]}/{coords[1]}.png'
+        x = coords[0] * 200
+        y = 6553600 - (coords[1] * 200)
+        downloaded_filename = f'tile_{x}_{y}.laz.png'
+        try:
+            await asyncio.to_thread(
+                s3_nz.download_file, 'nzomap', location, os.path.join(output_folder, downloaded_filename)
+            )
+        except Exception as e:
+            #print(f"Failed to download {location}: {e}")
+            pass
+
+    tasks = [download(coords) for coords in files_coords]
+    await asyncio.gather(*tasks)
+
 
 async def process_chunk(download_semaphore, pullauta_semaphore,i):
     """Processes a chunk of data."""
     
     # Ensure only one download runs at a time
     async with download_semaphore:
-        r = requests.get("https://fcghgojd5l.execute-api.us-east-2.amazonaws.com/dev/new_area")
+        r = requests.get("https://fcghgojd5l.execute-api.us-east-2.amazonaws.com/dev/new_area_specific")
         if r.status_code != 200:
             return False
         
@@ -273,8 +304,9 @@ async def process_chunk(download_semaphore, pullauta_semaphore,i):
         file_list = returned_json["files"]
         xmin = int(returned_json["xmin"])
         ymin = int(returned_json["ymin"])
-        print(f"Downloading data for chunk {area_uuid} thread {i}")
-
+        overwrite = returned_json['overwrite']
+        area_name = returned_json['area_name'] if 'area_name' in returned_json else 'LEGACY'
+        print(f"Downloading data for chunk {area_uuid} active threads={i}")
 
         process_dir = os.path.join("process", str(area_uuid))
         # ensure the process directory is empty
@@ -321,21 +353,22 @@ async def process_chunk(download_semaphore, pullauta_semaphore,i):
 
         await run_lastile(process_dir,cwd)
         
-        try:
-            shutil.rmtree(os.path.join(process_dir, "downloaded_files"))
-        except:
-            pass
+        # download any preexisting tiles, so we don't reprocess them - only when not overwriting
+        if not overwrite:
+            await download_tiles(os.path.join(process_dir, "output"), xmin, ymin)
 
-        await run_pullauta(cwd)
-
-        try:
-            shutil.rmtree(os.path.join(process_dir, "tiles"))
-        except:
-            pass
+        # run pullauta until all files are processed, or 20 retries
+        for i in range(20):
+            print(f"Running pullauta for chunk {area_uuid} - attempt {i+1}")
+            await run_pullauta(cwd)
+            output_pngs = [f for f in os.listdir(os.path.join(process_dir, "output")) if f.endswith('.laz.png')]
+            input_tiles = [f for f in os.listdir(os.path.join(process_dir, "tiles")) if f.endswith('.laz')]
+            if len(output_pngs) == len(input_tiles):
+                break
 
     # Upload results to S3
     output_folder = os.path.join(process_dir, "output")
-    uploaded_chunk = await upload_files(output_folder, area_uuid, xmin, ymin)
+    uploaded_chunk = await upload_files(output_folder, area_uuid, xmin, ymin,area_name)
     print(f"Finished processing and uploading chunk {uploaded_chunk}")
 
     # Clean up
@@ -348,6 +381,7 @@ async def process_chunk(download_semaphore, pullauta_semaphore,i):
         pass
 
 async def main():
+    ensure_dir("process")  # Ensure process directory exists
     tasks = set()  # Store running tasks
     download_semaphore = asyncio.Semaphore(1)  # Only one download at a time
     pullauta_semaphore = asyncio.Semaphore(1)  # Only one pullauta execution at a time
@@ -358,36 +392,13 @@ async def main():
             
             task.add_done_callback(lambda t: tasks.remove(t))  # Remove completed task
         
-        await asyncio.sleep(10)  # Prevent CPU overuse
+        await asyncio.sleep(15)  # Prevent CPU overuse
 
 
 if __name__ == "__main__":
     async def process_all_chunks():
-        if os.path.exists("process"):
-            try:
-                shutil.rmtree("process")
-            except Exception as e:
-                print(f"Warning: Failed to remove 'process' directory: {e}")
-
-        ensure_dir("process")  # Ensure process directory exists
         await main()
 
-    # Create event loop
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-
-    async def proc_forever():
-        while True:
-            try:
-                await process_all_chunks()
-            except Exception as e:
-                print(f"Error in processing loop: {e}")
-
-    loop.create_task(proc_forever())  # Schedule processing loop
-
-    try:
-        loop.run_forever()
-    except KeyboardInterrupt:
-        print("Stopping process...")
-        loop.run_until_complete(loop.shutdown_asyncgens())  # Ensure cleanup
-        loop.close()
+    loop.run_until_complete(process_all_chunks())
