@@ -47,7 +47,7 @@ def write_file(file_path, content_lines):
         f.writelines(f"{line}\n" for line in content_lines)
 
 
-async def upload_files(output_folder, chunk_id, xmin, ymin):
+async def upload_files(output_folder, chunk_id, xmin, ymin, area_name):
     files = [f for f in os.listdir(output_folder) if f.endswith('.laz_depr.png')]
 
     async def upload(file):
@@ -64,10 +64,10 @@ async def upload_files(output_folder, chunk_id, xmin, ymin):
     await asyncio.gather(*tasks)
 
     
-    if SPECIFIED_AREA is not None:
+    if not area_name == 'LEGACY':
         payload = {
             'uuid': chunk_id,
-            'area_name': SPECIFIED_AREA
+            'area_name': area_name
         }
         requests.post('https://fcghgojd5l.execute-api.us-east-2.amazonaws.com/dev/release_area_v2', json=payload)
     
@@ -285,7 +285,7 @@ def create_osm_txt_file():
     write_file( "osm.txt", content)
 
 
-async def process_chunk(chunk_id, xmin, ymin, file_list,overwrite, download_semaphore, pullauta_semaphore):
+async def process_chunk(chunk_id, xmin, ymin, file_list,overwrite,area_name, download_semaphore, pullauta_semaphore):
     """Processes a chunk of data."""
     process_dir = os.path.join("process", str(chunk_id))
 
@@ -354,7 +354,7 @@ async def process_chunk(chunk_id, xmin, ymin, file_list,overwrite, download_sema
 
     # Upload results to S3
     output_folder = os.path.join(process_dir, "output")
-    uploaded_chunk = await upload_files(output_folder, chunk_id, xmin, ymin)
+    uploaded_chunk = await upload_files(output_folder, chunk_id, xmin, ymin, area_name)
     print(f"Finished processing and uploading chunk {uploaded_chunk}")
 
     # Clean up
@@ -368,7 +368,7 @@ async def main(chunks):
     download_semaphore = asyncio.Semaphore(1)  # Only one download at a time
     pullauta_semaphore = asyncio.Semaphore(1)  # Only one pullauta execution at a time
 
-    tasks = [process_chunk(chunk['chunk_id'],chunk['xmin'],chunk['ymin'],chunk['file_list'],chunk['overwrite'],download_semaphore,pullauta_semaphore) for chunk in chunks]
+    tasks = [process_chunk(chunk['chunk_id'],chunk['xmin'],chunk['ymin'],chunk['file_list'],chunk['overwrite'],chunk['area_name'],download_semaphore,pullauta_semaphore) for chunk in chunks]
     await asyncio.gather(*tasks)
 
 if __name__ == "__main__":
@@ -386,7 +386,7 @@ if __name__ == "__main__":
             r = requests.post("https://fcghgojd5l.execute-api.us-east-2.amazonaws.com/dev/new_area_specific",json=payload)
 
         else:
-            r = requests.get("https://fcghgojd5l.execute-api.us-east-2.amazonaws.com/dev/new_area")
+            r = requests.get("https://fcghgojd5l.execute-api.us-east-2.amazonaws.com/dev/new_area_specific")
 
         if r.status_code == 200:
             returned_json = json.loads(r.json()["body"])
@@ -395,7 +395,8 @@ if __name__ == "__main__":
             xmin = int(returned_json["xmin"])
             ymin = int(returned_json["ymin"])
             overwrite = returned_json['overwrite']
-            chunk_1 = {"chunk_id": area_uuid, "xmin": xmin, "ymin": ymin, "file_list": file_list, 'overwrite': overwrite}
+            area_name = returned_json['area_name'] if 'area_name' in returned_json else 'LEGACY'
+            chunk_1 = {"chunk_id": area_uuid, "xmin": xmin, "ymin": ymin, "file_list": file_list, 'overwrite': overwrite, 'area_name': area_name}
 
             if SPECIFIED_AREA is not None:
                 payload = {
@@ -415,7 +416,9 @@ if __name__ == "__main__":
                 xmin = int(returned_json["xmin"])
                 ymin = int(returned_json["ymin"])
                 overwrite = returned_json['overwrite']
-                chunk_2 = {"chunk_id": area_uuid, "xmin": xmin, "ymin": ymin, "file_list": file_list, 'overwrite': overwrite}
+                area_name = returned_json['area_name'] if 'area_name' in returned_json else 'LEGACY'
+                chunk_2 = {"chunk_id": area_uuid, "xmin": xmin, "ymin": ymin, "file_list": file_list, 'overwrite': overwrite, 'area_name': area_name}
+                
 
                 await main([chunk_1, chunk_2])
             
