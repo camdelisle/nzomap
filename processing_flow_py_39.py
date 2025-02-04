@@ -407,7 +407,7 @@ if __name__ == "__main__":
                 r2 = requests.post("https://fcghgojd5l.execute-api.us-east-2.amazonaws.com/dev/new_area_specific",json=payload)
 
             else:
-                r2 = requests.get("https://fcghgojd5l.execute-api.us-east-2.amazonaws.com/dev/new_area")
+                r2 = requests.get("https://fcghgojd5l.execute-api.us-east-2.amazonaws.com/dev/new_area_specific")
 
             if r2.status_code == 200:
                 returned_json = json.loads(r2.json()["body"])
