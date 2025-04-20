@@ -311,7 +311,10 @@ async def process_chunk(chunk_id, xmin, ymin, file_list,overwrite,area_name, dow
         for file in file_list.split(','):
             file_name = os.path.basename(file)
             path_without_bucket = file.replace('https://opentopography.s3.sdsc.edu/pc-bulk/', '')
-            s3.download_file('pc-bulk', path_without_bucket, os.path.join(downloaded_files_dir, file_name))
+            try:
+                s3.download_file('pc-bulk', path_without_bucket, os.path.join(downloaded_files_dir, file_name))
+            except Exception as e:
+                print(f"Failed to download {file}: {e}")
 
         print(f"Finished downloading data for chunk {chunk_id}")
 
