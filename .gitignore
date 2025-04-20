@@ -191,3 +191,5 @@ plan.txt
 *.shp
 *.shx
 launch.json
+*.laz
+*.png.aux
