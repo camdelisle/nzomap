@@ -170,7 +170,6 @@ def create_pullauta_file(cores, main_dir):
         "basemapinterval=0",
         "scalefactor=1",
         "zoffset=0",
-        "experimental_use_in_memory_fs=1",
     ]
     write_file("pullauta.ini", content)
 
