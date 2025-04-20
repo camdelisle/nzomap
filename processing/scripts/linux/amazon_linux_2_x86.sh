@@ -54,8 +54,9 @@ tar -xvf "$KARTTAPULLAUTIN_FILE" -C /home/ubuntu/kp || { echo "Failed to extract
 
 # Set permissions and move binaries
 chmod +x /home/ubuntu/las_tools/bin/lastile64 || { echo "Failed to set executable permissions for lastile"; exit 1; }
+chmod +x /home/ubuntu/las_tools/bin/lasindex64  || { echo "Failed to set executable permissions for lasindex"; exit 1; }
 chmod +x /home/ubuntu/kp/pullauta || { echo "Failed to set executable permissions for pullauta"; exit 1; }
-sudo mv /home/ubuntu/las_tools/bin/lastile64 /home/ubuntu/kp/pullauta /home/ubuntu/nzomap_processing || { echo "Failed to move binaries"; exit 1; }
+sudo mv /home/ubuntu/las_tools/bin/lastile64 /home/ubuntu/las_tools/bin/lasindex64 /home/ubuntu/kp/pullauta /home/ubuntu/nzomap_processing || { echo "Failed to move binaries"; exit 1; }
 
 # add dependency path for lastile64
 export LD_LIBRARY_PATH=./lib:/home/ubuntu/las_tools/bin/lib/

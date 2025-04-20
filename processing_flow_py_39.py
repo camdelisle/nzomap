@@ -12,6 +12,9 @@ import json
 # example: 'NZ20_Hawkes'
 SPECIFIED_AREA = None
 
+# specify areas that include lidar without lax files - as we need to index these
+AREAS_REQUIRING_INDEXING = ['NZ22NZ24_Whanganui']
+
 # set the number of threads you wish to use here (VCPU or (cores x2)-2 )
 SET_THREADS = 4
 
@@ -30,9 +33,11 @@ s3._request_signer.sign = (lambda *args, **kwargs: None)
 if os.name == 'nt':
     pullauta = 'pullauta'
     lastile = 'lastile64'
+    lasindex = 'lasindex64'
 else:
     pullauta = './pullauta'
     lastile = './lastile64'
+    lasindex = './lasindex64'
 
 
 # Utility Functions
@@ -119,6 +124,11 @@ async def run_command(command, cwd):
 async def run_lastile(process_dir,cwd):
     """Runs the lastile tool."""
     cmd = f"{lastile} -i {os.path.join(process_dir, 'downloaded_files', '*.laz')} -tile_size 200 -odir {os.path.join(process_dir, 'tiles')} -o tile.laz"
+    await run_command(cmd, cwd)
+
+async def run_lasindex(process_dir,cwd):
+    """Runs the lasindex tool."""
+    cmd = f"{lasindex} -i {os.path.join(process_dir, 'downloaded_files', '*.laz')}"
     await run_command(cmd, cwd)
 
 async def run_pullauta(cwd):
@@ -310,14 +320,18 @@ async def process_chunk(chunk_id, xmin, ymin, file_list,overwrite,area_name, dow
         print(f"Downloading data for chunk {chunk_id}")
         for file in file_list.split(','):
             file_name = os.path.basename(file)
+            if(file_name.endswith('x') and area_name in AREAS_REQUIRING_INDEXING):
+                print(f"Skipping {file_name} as LAX files need to be regenerated for this area")
+                continue
+
             path_without_bucket = file.replace('https://opentopography.s3.sdsc.edu/pc-bulk/', '')
             try:
                 s3.download_file('pc-bulk', path_without_bucket, os.path.join(downloaded_files_dir, file_name))
             except Exception as e:
                 print(f"Failed to download {file}: {e}")
+                pass
 
         print(f"Finished downloading data for chunk {chunk_id}")
-
 
 
     async with pullauta_semaphore:
@@ -339,6 +353,9 @@ async def process_chunk(chunk_id, xmin, ymin, file_list,overwrite,area_name, dow
 
         create_pullauta_file(SET_THREADS, process_dir)
         create_osm_txt_file()
+
+        if area_name in AREAS_REQUIRING_INDEXING:
+            await run_lasindex(process_dir,cwd)
 
         await run_lastile(process_dir,cwd)
 
