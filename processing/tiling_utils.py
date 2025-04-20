@@ -20,7 +20,11 @@ async def crop_and_tile_pngs(process_dir,bounds,tile_size_m):
     if not src_files:
         raise ValueError("No PNGs found in input directory.")
 
-    mosaic, mosaic_transform = merge(src_files)
+    mosaic, mosaic_transform = merge(
+        src_files,
+        bounds=bounds,
+        nodata=nodata_value,
+    )
     meta = src_files[0].meta.copy()
     crs = src_files[0].crs
     for src in src_files:
