@@ -193,3 +193,6 @@ plan.txt
 launch.json
 *.laz
 *.png.aux
+/processing/package
+/processing/indexes
+/processing/process
