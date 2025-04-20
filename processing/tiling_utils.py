@@ -25,6 +25,16 @@ async def crop_and_tile_pngs(process_dir,bounds,tile_size_m):
         bounds=bounds,
         nodata=nodata_value,
     )
+
+    # Convert to RGB if single-band
+    if mosaic.shape[0] == 1:
+        # Expand to 3 bands (repeat grayscale into RGB)
+        mosaic = np.repeat(mosaic, 3, axis=0)
+
+    # Force fill_value to be white across all bands
+    nodata_rgb = 255
+    mosaic[mosaic == nodata_value] = nodata_rgb  # just to be safe
+
     meta = src_files[0].meta.copy()
     crs = src_files[0].crs
     for src in src_files:
@@ -36,7 +46,7 @@ async def crop_and_tile_pngs(process_dir,bounds,tile_size_m):
         "width": mosaic.shape[2],
         "transform": mosaic_transform,
         "count": mosaic.shape[0],
-        "nodata": nodata_value
+        "nodata": None
     })
 
     # === Step 2: Crop to bounding box ===
