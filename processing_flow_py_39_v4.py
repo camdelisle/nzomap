@@ -310,6 +310,14 @@ async def process_chunk(chunk_id, xmin, ymin, file_list,area_name, download_sema
         except:
             pass
 
+        # remove temp folders if they exist - to prevent weird bugs where data is not deleted
+        try:
+            for thread in range(SET_THREADS):
+                if os.path.exists(f"temp{thread+1}"):
+                    shutil.rmtree(f"temp{thread+1}")
+        except:
+            pass
+
         # download the osm zip - must go in the input 'downloaded_files' folder
         try:
             s3_nz.download_file('nzomap', f'osm/5000/{xmin}_{ymin}.zip', os.path.join(os.path.join(process_dir, "downloaded_files"), 'osm.zip'))
