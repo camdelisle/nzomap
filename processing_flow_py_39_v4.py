@@ -355,15 +355,15 @@ async def process_chunk(chunk_id, xmin, ymin, file_list,area_name, download_sema
             "area_name": area_name,
             "uuid": chunk_id
         }
-        boto3.resource('lambda').invoke(
+        boto3.client('lambda').invoke(
             FunctionName='arn:aws:lambda:us-east-2:664418968878:function:nzomapCreateZooms',
-            InvocationType='Event',
-            Payload=json.dumps(payload)
+            InvocationType='Event',  # async fire-and-forget
+            Payload=json.dumps(payload).encode('utf-8')
         )
     except Exception as e:
         print(f"Failed to invoke lambda function for chunk {chunk_id}: {e}")
         pass
-    
+
     # Clean up
     shutil.rmtree(process_dir)
     print(f"Cleaned up temporary files for chunk {chunk_id}")
