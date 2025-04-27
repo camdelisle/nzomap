@@ -4,6 +4,7 @@ import boto3
 import shutil
 import requests
 import json
+import numpy as np
 
 from processing.tiling_utils import crop_and_tile_pngs
 
@@ -346,6 +347,23 @@ async def process_chunk(chunk_id, xmin, ymin, file_list,area_name, download_sema
     uploaded_chunk = await upload_files(output_folder, chunk_id, xmin, ymin, area_name)
     print(f"Finished processing and uploading chunk {uploaded_chunk}")
 
+    # request tiling for the new chunk
+    try:
+        payload = {
+            "xmin": xmin,
+            "ymin": ymin,
+            "area_name": area_name,
+            "uuid": chunk_id
+        }
+        boto3.resource('lambda').invoke(
+            FunctionName='arn:aws:lambda:us-east-2:664418968878:function:nzomapCreateZooms',
+            InvocationType='Event',
+            Payload=json.dumps(payload)
+        )
+    except Exception as e:
+        print(f"Failed to invoke lambda function for chunk {chunk_id}: {e}")
+        pass
+    
     # Clean up
     shutil.rmtree(process_dir)
     print(f"Cleaned up temporary files for chunk {chunk_id}")
@@ -382,7 +400,19 @@ if __name__ == "__main__":
             area_uuid = returned_json["uuid"]
             file_list = returned_json["files"]
             xmin = int(returned_json["xmin"])
+            if xmin // 5000 != xmin / 5000:
+                xmin_diff = xmin % 5000
+                if (xmin + xmin_diff) // 5000 != (xmin + xmin_diff) / 5000:
+                    xmin_diff = -xmin_diff
+                xmin = int(np.round(xmin + xmin_diff))
+                
             ymin = int(returned_json["ymin"])
+            if ymin // 5000 != ymin / 5000:
+                ymin_diff = ymin % 5000
+                if (ymin + ymin_diff) // 5000 != (ymin + ymin_diff) / 5000:
+                    ymin_diff = -ymin_diff
+                ymin = int(np.round(ymin + ymin_diff))
+
             overwrite = returned_json['overwrite']
             area_name = returned_json['area_name'] if 'area_name' in returned_json else 'LEGACY'
             chunk_1 = {"chunk_id": area_uuid, "xmin": xmin, "ymin": ymin, "file_list": file_list, 'overwrite': overwrite, 'area_name': area_name}
