@@ -355,7 +355,7 @@ async def process_chunk(chunk_id, xmin, ymin, file_list,area_name, download_sema
             "area_name": area_name,
             "uuid": chunk_id
         }
-        boto3.client('lambda').invoke(
+        boto3.client('lambda', region_name='us-east-2').invoke(
             FunctionName='arn:aws:lambda:us-east-2:664418968878:function:nzomapCreateZooms',
             InvocationType='Event',  # async fire-and-forget
             Payload=json.dumps(payload).encode('utf-8')
